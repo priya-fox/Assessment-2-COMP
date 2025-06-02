@@ -10,61 +10,48 @@ reviews = read.csv("reviews.csv")
 
 # Join users with reviews 
 
-users_reviews <- reviews %>% left_join(users %>%
-                                         select(user_id, review_count, average_stars, member_since), by = "user_id")
-# Sort users into groups based on membership start date
-users_reviews <- users_reviews %>%
-  mutate(member_groups = case_when(
+####Q1
+
+users <- read.csv("users.csv")
+reviews <- read.csv("reviews.csv")
+
+by_user_id <- reviews %>% left_join(users %>% select(user_id, member_since), by = "user_id")
+head(by_user_id)
+
+# Convert member_since to dates and remove NAs
+review_clean <- by_user_id %>% 
+  mutate(member_since = as.Date(member_since)) %>%
+  filter(!is.na(member_since), !is.na(user_id), !is.na(stars), !is.na(review_id))
+
+review_clean <- review_clean %>% 
+  mutate(member_group = case_when(
     member_since < as.Date("2017-01-01") ~ "Veteran",
-    member_since >= as.Date("2017-01-01") & member_since < "2022-01-01" ~ "Intermediate",
+    member_since >= as.Date("2017-01-01") & member_since < as.Date("2022-01-01") ~ "Intermediate",
     member_since >= as.Date("2022-01-01") ~ "New"
-  )
-) 
+  ))
 
-head(users_reviews)
-
-# Handle NA values 
-clean_users_reviews <- users_reviews %>% 
-  filter(!is.na(member_groups), !is.na(average_stars), !is.na(review_count))
-
-# Count users 
-user_counts <- clean_users_reviews %>%
-  filter(!is.na(member_groups), !is.na(user_id)) %>%
-  group_by(member_groups) %>%
-  summarise(user_counts = n_distinct(user_id)) %>%
-  arrange(match(member_groups, c("Veteran", "Intermediate", "New")))
-
-print(user_counts)
-
-# Summarise data and handle NA values again
-# Number of unique users
-# Average Stars 
-# Average Reviews 
-summary_table <- clean_users_reviews %>%
-  group_by(member_groups) %>%
+# Summary by member group 
+summary_table <- review_clean %>%
+  group_by(member_group) %>%
   summarise(
-    users_num = n_distinct(user_id),
-    Avg_stars = round(mean(average_stars, na.rm = TRUE),2),
-    Avg_Reviews = round(mean(review_count, na.rm = TRUE), 2)
+    user_count = n_distinct(user_id),
+    review_count = n_distinct(review_id),  # Count unique reviews
+    avg_review_stars = round(mean(stars, na.rm = TRUE), 2),
+    avg_reviews_per_user = round(n_distinct(review_id) / n_distinct(user_id), 2)
   ) %>%
-  arrange(match(member_groups, c("Veteran", "Intermediate", "New")))
+  arrange(match(member_group, c("Veteran", "Intermediate", "New")))
 
-# Tabulate users, average stars and review counts.
 summary_table %>%
-  kable("html", caption = "User Review Behaviour by Group") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+  kable(caption = "User Review Behaviour by Member Group") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed"))
 
-colnames(summary_table) # check column names for ggplot
-
-# Create ggplot of average stars in each group
-ggplot(summary_table, aes(x=member_groups, 
-                          y = Avg_stars, 
-                          fill= member_groups))+
-  geom_bar(stat = "identity", width = 0.6) +  
-  labs(title = "Each Groups Average Stars", 
-       x = "User Group", 
+ggplot(summary_table, aes(x = member_group, y = avg_review_stars, fill = member_group)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  labs(title = "Average Review Stars by User Group",
+       x = "User Group",
        y = "Average Stars") +
-  theme_minimal()
+  theme_minimal() +
+  theme(legend.position = "none")
 
 
 
